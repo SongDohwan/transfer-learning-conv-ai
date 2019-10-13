@@ -20,7 +20,7 @@ from utils import get_dataset_personalities, download_pretrained_model
 import matplotlib.pyplot as plt
 
 
-def top_k_top_p_filtering(logits, tokenizer, history, args, top_k=0, top_p=0.0, filter_value=-float('Inf'),
+def top_k_top_p_filtering(logits, tokenizer, history, args, B_tokenizer, top_k=0, top_p=0.0, filter_value=-float('Inf'),
                           current_output=None):
     """ Filter a distribution of logits using top-k and/or nucleus (top-p) filtering
         Args:
@@ -59,22 +59,34 @@ def top_k_top_p_filtering(logits, tokenizer, history, args, top_k=0, top_p=0.0, 
         prev = torch.topk(probs, 1)[1] if args.no_sample else torch.multinomial(probs, len(index))
         text = []
         last_utt = history[-1]
+
         print(len(index))
         for i in prev:
             text.append(i.item())
         for i in text:
             x = current_output.copy()
             x.append(i)
-            # raw_text=tokenizer.decode(x, skip_special_tokens=True)
-            raw_text = tokenizer.decode(x)
-            print(raw_text)
+            raw_text=tokenizer.decode(x, skip_special_tokens=True)
+            #raw_text = tokenizer.decode(x)
+            marked_text1 = "[CLS] " + raw_text + " [SEP]"
+            print(marked_text1)
+            marked_text2 = "[CLS] " + last_utt + " [SEP]"
+            print(marked_text2)
+            tokenized_text1 = B_tokenizer.tokenize(marked_text1)
+            print (tokenized_text1)
+            tokenized_text2 = B_tokenizer.tokenize(marked_text2)
+            print (tokenized_text2)
+            indexed_tokens1 = B_tokenizer.convert_tokens_to_ids(tokenized_text1)
+            indexed_tokens2 = B_tokenizer.convert_tokens_to_ids(tokenized_text2)
+            print(indexed_tokens1)
+            print(indexed_tokens2)
             x.clear()
-        B_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
 
     return logits
 
 
-def sample_sequence(personality, history, tokenizer, model, args, current_output=None):
+def sample_sequence(personality, history, tokenizer, B_tokenizer, model, args, current_output=None):
     special_tokens_ids = tokenizer.convert_tokens_to_ids(SPECIAL_TOKENS)
     if current_output is None:
         current_output = []
@@ -91,7 +103,7 @@ def sample_sequence(personality, history, tokenizer, model, args, current_output
         if isinstance(logits, tuple):  # for gpt2 and maybe others
             logits = logits[0]
         logits = logits[0, -1, :] / args.temperature
-        logits = top_k_top_p_filtering(logits, tokenizer, history, args, top_k=top_k, top_p=top_p,
+        logits = top_k_top_p_filtering(logits, tokenizer, history, args, B_tokenizer, top_k=top_k, top_p=top_p,
                                        current_output=current_output)
         probs = F.softmax(logits, dim=-1)
 
@@ -149,6 +161,7 @@ def run():
     model = model_class.from_pretrained(args.model_checkpoint)
     model.to(args.device)
     add_special_tokens_(model, tokenizer)
+    B_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
     logger.info("Sample a personality")
     personalities = get_dataset_personalities(tokenizer, args.dataset_path, args.dataset_cache)
@@ -163,7 +176,7 @@ def run():
             raw_text = input(">>> ")
         history.append(tokenizer.encode(raw_text))
         with torch.no_grad():
-            out_ids = sample_sequence(personality, history, tokenizer, model, args)
+            out_ids = sample_sequence(personality, history, tokenizer, B_tokenizer, model, args)
         history.append(out_ids)
         history = history[-(2 * args.max_history + 1):]
         out_text = tokenizer.decode(out_ids, skip_special_tokens=True)
