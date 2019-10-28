@@ -26,6 +26,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 from PyQt5.QtWidgets import *
+from PyQt5.QtGui import *
 from PyQt5 import uic
 
 form_class = uic.loadUiType("untitled.ui")[0]
@@ -211,6 +212,8 @@ def sample_sequence(personality, history, tokenizer, B_tokenizer, model, args, B
     return current_output
 
 
+
+
 def run():
     parser = ArgumentParser()
     parser.add_argument("--dataset_path", type=str, default="",
@@ -261,11 +264,38 @@ def run():
 
     history = []
 
+    class WindowClass(QMainWindow, form_class):
+        def __init__(self):
+            super().__init__()
+            self.setupUi(self)
+            self.enter.clicked.connect(self.enterPlainTextEdit)
+
+            # PlainTextEdit과 관련된 함수
+            def enterPlainTextEdit(self):
+                input = self.user.toPlainText()
+                self.bot.append(input)
+                raw_text = input
+                history.append(tokenizer.encode(raw_text))
+                with torch.no_grad():
+                    out_ids = sample_sequence(personality, history, tokenizer, B_tokenizer, model, args, B_model)
+                history.append(out_ids)
+                history = history[-(2 * args.max_history + 1):]
+                out_text = tokenizer.decode(out_ids, skip_special_tokens=True)
+                self.bot.append(out_text)
+
+    app = QApplication(sys.argv)
+    myWindow = WindowClass()
+    myWindow.show()
+    app.exec_()
+
+''' ####important####
     while True:
-        raw_text = input(">>> ")
+        #raw_text = input(">>> ")
+        raw_text = input
         while not raw_text:
             print('Prompt should not be empty!')
-            raw_text = input(">>> ")
+            #raw_text = input(">>> ")
+            raw_text =input
         history.append(tokenizer.encode(raw_text))
         with torch.no_grad():
             out_ids = sample_sequence(personality, history, tokenizer, B_tokenizer, model, args, B_model)
@@ -273,6 +303,7 @@ def run():
         history = history[-(2 * args.max_history + 1):]
         out_text = tokenizer.decode(out_ids, skip_special_tokens=True)
         print(out_text)
+        '''
 '''
 ####################################
         marked_text2 = "[CLS] " + "hi. how are you?" + " [SEP]"
@@ -360,14 +391,6 @@ def run():
 ###############################################################################
         '''
 
-class WindowClass(QMainWindow, form_class) :
-    def __init__(self) :
-        super().__init__()
-        self.setupUi(self)
 
 if __name__ == "__main__":
     run()
-    app = QApplication(sys.argv)
-    myWindow = WindowClass()
-    myWindow.show()
-    app.exec_()
